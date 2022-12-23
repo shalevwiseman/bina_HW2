@@ -56,6 +56,7 @@ class TaxiStochasticProblem:
             start = time.perf_counter()
             action = self.agent.act(self.state)
             end = time.perf_counter()
+            print((end - start) > TURN_TIME_LIMIT)
             if end - start > TURN_TIME_LIMIT:
                 logging.critical(f"timed out on an action")
                 raise TimeoutError
