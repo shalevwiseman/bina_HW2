@@ -12,7 +12,8 @@ RESET_PENALTY = 50
 REFUEL_PENALTY = 10
 DROP_IN_DESTINATION_REWARD = 100
 INIT_TIME_LIMIT = 300
-TURN_TIME_LIMIT = 0.1
+TURN_TIME_LIMIT = 1000
+
 
 
 def initiate_agent(state):
@@ -41,7 +42,7 @@ class TaxiStochasticProblem:
         self.state = deepcopy(an_input)
         self.graph = self.build_graph()
         start = time.perf_counter()
-        self.agent = initiate_agent(self.state)
+        self.agent = initiate_agent(deepcopy(self.state))
         end = time.perf_counter()
         if end - start > INIT_TIME_LIMIT:
             logging.critical("timed out on constructor")
@@ -54,9 +55,8 @@ class TaxiStochasticProblem:
         """
         while self.state["turns to go"]:
             start = time.perf_counter()
-            action = self.agent.act(self.state)
+            action = self.agent.act(deepcopy(self.state))
             end = time.perf_counter()
-            print((end - start) > TURN_TIME_LIMIT)
             if end - start > TURN_TIME_LIMIT:
                 logging.critical(f"timed out on an action")
                 raise TimeoutError
@@ -99,6 +99,9 @@ class TaxiStochasticProblem:
             passenger_name = drop_action[2]
             # check same position
             if self.state['taxis'][taxi_name]['location'] != self.state['passengers'][passenger_name]['destination']:
+                return False
+            # check passenger is in the taxi
+            if self.state['passengers'][passenger_name]['location'] != taxi_name:
                 return False
             return True
 

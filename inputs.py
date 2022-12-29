@@ -1,5 +1,6 @@
 small_inputs = [
 
+    # 3x3 2 taxi, 2 passengers w/ 1 possible goals, low fuel
     {
         "optimal": False,
         "map": [['P', 'P', 'G'],
