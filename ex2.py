@@ -58,6 +58,8 @@ def bfs_paths(map, start):
 
             # Add the path and distance to the dictionary
             paths[(i, j)] = {'path': path, 'distance': len(path)}
+            if map[i][j] == 'I':
+                paths[(i, j)]['distance'] = float('inf')
 
     # Return the paths dictionary
     return paths
@@ -170,6 +172,8 @@ class TaxiAgent:
                 distance_dict[(i, j)][(i, j)] = {}
                 distance_dict[(i, j)][(i, j)]["path"] = []
                 distance_dict[(i, j)][(i, j)]["distance"] = 0
+
+
                 if map[i][j] == 'G':
                     gas_station_dict[(i, j)] = distance_dict[(i, j)]
 
@@ -286,8 +290,9 @@ class TaxiAgent:
                 dist_to_destination = taxi_path[passenger_location][passenger_destination]['distance']
                 total_path = taxi_path[taxi_location][passenger_location]['path'] + taxi_path[passenger_location][passenger_destination]["path"]
                 total_dist = dist_to_passenger + dist_to_destination
+
                 if self.check_fuel(fuel, total_path, taxi_path, gas_stations) is not None:
-                    total_dist = len(self.check_fuel(fuel, total_path, taxi_path, gas_stations))
+                    total_dist = total_dist
                     if total_dist < min_dist_per_taxi:
                         min_dist_per_taxi = total_dist
                         best_passenger_per_taxi = passenger
@@ -300,7 +305,8 @@ class TaxiAgent:
                 best_taxi = taxi
                 best_passenger_loc = best_passenger_loc_per_taxi
                 best_passenger_dest = best_passenger_dest_per_taxi
-
+            if best_passenger_loc == None or best_passenger_dest == None:
+                continue
             best_path = taxi_path[taxi_location][best_passenger_loc]["path"] + taxi_path[best_passenger_loc][best_passenger_dest]["path"]
 
         print(best_taxi, best_passenger, best_path)
@@ -350,8 +356,11 @@ class TaxiAgent:
         if taxis_dict[taxi]["capacity"] > 0:
             # check if I have passenger to pick
             for passenger in passengers_set:
-                if taxi_location == passengers_dict[passenger]["location"] and passengers_dict[passenger]["location"] != passengers_dict[passenger]["destination"]:
-                    return "pick up", taxi, passenger
+                if taxi_location == passengers_dict[passenger]["location"]:
+                    if passengers_dict[passenger]["location"] == passengers_dict[passenger]["destination"]:
+                        return "wait", taxi
+                    else:
+                        return "pick up", taxi, passenger
 
         # refuel
         # start with simple check
@@ -361,76 +370,44 @@ class TaxiAgent:
             return "refuel", taxi
 
         # move
-        
-        if state["passengers"][self.best_passenger]["destination"] == self.current_dest:
-            if len(self.best_path) > 0:
-                best_move = self.best_path.pop(0)
-                return "move", taxi, best_move
+        if len(additional_info["taxis"][taxi]["passengers in taxi"]) > 0:
+            if state["passengers"][self.best_passenger]["destination"] == self.current_dest:
+                if len(self.best_path) > 0:
+                    best_move = self.best_path.pop(0)
+                    return "move", taxi, best_move
+                else:
+                    return "wait", taxi
             else:
-                return "wait", taxi
-        else:
-            self.current_dest = state["passengers"][self.best_passenger]["destination"]
-            print(self.current_dest)
-            if len(additional_info["taxis"][taxi]["passengers in taxi"]) > 0:
-                self.best_path = self.paths_dict[taxi_location][self.current_dest]
-                print(self.best_path)
-            else:
+                self.current_dest = state["passengers"][self.best_passenger]["destination"]
+                print(self.current_dest)
+
                 passenger_location = state["passengers"][self.best_passenger]["location"]
                 passenger_dest = self.current_dest
-                self.best_path = self.paths_dict[taxi_location][state["passengers"][self.best_passenger]["location"]]["path"] + self.paths_dict[state["passengers"][self.best_passenger]["location"]][self.current_dest]["path"]
+                self.best_path = self.paths_dict[taxi_location][self.current_dest]["path"]
                 print(self.best_path)
                 if len(self.best_path) > 0:
                     best_move = self.best_path.pop(0)
                     return "move", taxi, best_move
                 else:
                     return "wait", taxi
-        locations = self.valid_moves_dict[taxi_location]
-        # need to check if there is taxi in the locations
-
-        for other_taxi in state["taxis"].keys():
-            if state["taxis"][other_taxi]["location"] in locations:
-                locations.remove(state["taxis"][other_taxi]["location"])
-
-
-        # check if I have someone to drop
-        if len(additional_info["taxis"][taxi]["passengers in taxi"]) > 0:
-            # I create two lists one is locations includes the valid locations, and one is for possible destinations
-            # includes passengers destination, and I pick the best move option
-
-            optionals_destinations = []
-
-            for passenger in additional_info["taxis"][taxi]["passengers in taxi"]:
-                optionals_destinations.append(passengers_dict[passenger]["destination"])
-
-
-
-            best_move = get_min_dist_point(optionals_destinations, taxi_location, self.paths_dict, locations)
-
-
-            return "move", taxi, best_move
-
         else:
-            optionals_destinations = []
-
-            for passenger in passengers_dict.keys():
-                if passengers_dict[passenger]["location"] != passengers_dict[passenger]["destination"] and \
-                        additional_info["passengers"][passenger]["status"] == "waiting":
-                    optionals_destinations.append(passengers_dict[passenger]["location"])
-
-
-
-            best_move = get_min_dist_point(optionals_destinations, taxi_location, self.paths_dict, locations)
-
-            return "move", taxi, best_move
+            if len(self.best_path) > 0:
+                best_move = self.best_path.pop(0)
+                return "move", taxi, best_move
+            else:
+                return "wait", taxi
 
     def act(self, state):
 
         additional_info = self.translate_state(state)
         actions = {taxi: ("wait", taxi) for taxi in state["taxis"] if taxi != self.best_taxi}
-        taxi_chosen = "taxi 1"
+
         action_taxi = self.taxi_action(state, self.best_taxi, additional_info)
         actions[self.best_taxi] = action_taxi
         actions_values = tuple(actions.values())
+        if state["taxis"][self.best_taxi]['fuel'] == 0:
+            self.score -= 50
+            return "reset"
         for passenger in state["passengers"].keys():
             if self.score > 0:
 
