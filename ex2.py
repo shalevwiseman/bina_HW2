@@ -4,6 +4,8 @@ from collections import deque
 ids = ["111111111", "222222222"]
 
 
+
+
 def bfs_paths(map, start):
     # Set up the distance and visited arrays
     distance = [[-1 for _ in row] for row in map]
@@ -248,6 +250,70 @@ class TaxiAgent:
         # if you have enough gas
         return new_path
 
+    def go_to_gas(self, state, gas_stations, taxi, paths_dict, fuel):
+        taxi_location = state["taxis"][taxi]["location"]
+        for passenger in state["passengers"].keys():
+            passenger_location = state["passengers"][passenger]["location"]
+            passenger_destination = state["passengers"][passenger]["destination"]
+            dist_to_passenger = paths_dict[taxi_location][passenger_location]["distance"]
+            path_to_passenger = paths_dict[taxi_location][passenger_location]["path"]
+            dist_to_destination = paths_dict[passenger_location][passenger_destination]["distance"]
+            path_to_destination = paths_dict[passenger_location][passenger_destination]["path"]
+            current_path = None
+            if self.check_fuel(fuel, path_to_destination, paths_dict, gas_stations) is not None:
+                current_path = self.check_fuel(fuel, path_to_passenger, paths_dict, gas_stations)
+            else:
+                current_path = self.pick_station(taxi_location, passenger_location, passenger_destination, gas_stations,
+                                            fuel, paths_dict)
+                if current_path == None:
+                    continue
+            if current_path[-1] == passenger_destination:
+                return current_path, passenger
+        return None
+
+    def pick_station(self, start, mid_dest, dest, gas_stations, fuel, paths_dict):
+        """
+
+        :param paths_dict: distance and path from any point to any point
+        :param start: starting point
+        :param dest: the destination
+        :param gas_stations: list of all gas_stations
+        :param fuel: max amount of fuel
+
+        :return: path who also cross a gas station and get to her destination with the amount of uel that she have
+        """
+        best_station = None
+        best_path = None
+        max_dist_to_station = float('-inf')
+        dist_to_dest = float('inf')
+        current_dest_to_dist = paths_dict[start][dest]["distance"]
+        dist_to_mid = paths_dict[start][mid_dest]["distance"]
+        dist_f_mid_t_dest = paths_dict[mid_dest][dest]["distance"]
+        path_t_mid = None
+        for station in gas_stations:
+            dist_to_station = paths_dict[start][station]["distance"]
+            path_to_station = paths_dict[start][station]["path"]
+            dist_from_station_to_dest = paths_dict[station][dest]["distance"]
+            path_from_station_to_dest = paths_dict[station][dest]["path"]
+            dist_f_mid_t_station = paths_dict[mid_dest][station]["distance"]
+            path_f_mid_t_station = paths_dict[mid_dest][station]["path"]
+            if dist_to_mid + dist_f_mid_t_station <= fuel and dist_from_station_to_dest < dist_f_mid_t_dest:
+                path_t_mid = paths_dict[start][mid_dest]["path"] + path_f_mid_t_station
+        if path_t_mid == None:
+            return None
+        current_loc = path_t_mid[-1]
+        dist_f_cur_loc_t_dest = paths_dict[current_loc][dest]["distance"]
+        for station in gas_stations:
+            if station != current_loc:
+                dist_f_cur_t_station = paths_dict[current_loc][station]["distance"]
+                path_f_cur_t_station = paths_dict[current_loc][station]["path"]
+                dist_f_station_t_dest = paths_dict[station][dest]["distance"]
+                path_f_station_t_dest = paths_dict[station][dest]["path"]
+                if dist_f_cur_t_station <= fuel and dist_f_station_t_dest < fuel:
+                    best_path = path_t_mid + path_f_cur_t_station + path_f_station_t_dest
+
+        return best_path
+
 
 
     def pick_taxi_and_passenger(self, state):
@@ -288,7 +354,8 @@ class TaxiAgent:
                 passenger_destination = passengers_dict[passenger]["destination"]
                 dist_to_passenger = taxi_path[taxi_location][passenger_location]['distance']
                 dist_to_destination = taxi_path[passenger_location][passenger_destination]['distance']
-                total_path = taxi_path[taxi_location][passenger_location]['path'] + taxi_path[passenger_location][passenger_destination]["path"]
+                total_path = taxi_path[taxi_location][passenger_location]['path'] + \
+                             taxi_path[passenger_location][passenger_destination]["path"]
                 total_dist = dist_to_passenger + dist_to_destination
 
                 if self.check_fuel(fuel, total_path, taxi_path, gas_stations) is not None:
@@ -307,8 +374,14 @@ class TaxiAgent:
                 best_passenger_dest = best_passenger_dest_per_taxi
             if best_passenger_loc == None or best_passenger_dest == None:
                 continue
-            best_path = taxi_path[taxi_location][best_passenger_loc]["path"] + taxi_path[best_passenger_loc][best_passenger_dest]["path"]
-
+            best_path = taxi_path[taxi_location][best_passenger_loc]["path"] + \
+                        taxi_path[best_passenger_loc][best_passenger_dest]["path"]
+        if best_passenger == None or best_taxi == None:
+            taxi = 'taxi 1'
+            paths_dict, gas_dict = self.distance_dict_builder(map)
+            fuel = taxis_dict[taxi]['fuel']
+            best_path, best_passenger = self.go_to_gas(state, gas_dict, taxi, paths_dict, fuel)
+            return taxi, best_passenger, best_path
         print(best_taxi, best_passenger, best_path)
         return best_taxi, best_passenger, best_path
 
@@ -405,7 +478,7 @@ class TaxiAgent:
         action_taxi = self.taxi_action(state, self.best_taxi, additional_info)
         actions[self.best_taxi] = action_taxi
         actions_values = tuple(actions.values())
-        if state["taxis"][self.best_taxi]['fuel'] == 0:
+        if state["taxis"][self.best_taxi]['fuel'] == 0 and action_taxi[0] != "refuel":
             self.score -= 50
             return "reset"
         for passenger in state["passengers"].keys():
